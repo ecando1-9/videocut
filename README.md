@@ -30,6 +30,6 @@ Go to **Releases** and download the latest:
 5. Click **Split**
 
 ## 🧠 Example
-https://github.com/user-attachments/assets/5f05c082-e2d2-4c6c-8a87-222639c8f759<img width="695" height="659" alt="Screenshot 2025-12-20 195550" src="https://github.com/user-attachments/assets/1d6e2e3c-f307-4b32-ba18-e5181704a6db" />
+<img width="695" height="659" alt="Screenshot 2025-12-20 195550" src="https://github.com/user-attachments/assets/1d6e2e3c-f307-4b32-ba18-e5181704a6db" />
 
 
