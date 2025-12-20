@@ -17,5 +17,5 @@ Thumbs.db
 .DS_Store
 .png
 .jpg
-.ico
-.png
+*.ico
+*.png
