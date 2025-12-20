@@ -1,4 +1,5 @@
-# 🎬 VideoCut – Smart Video Splitter for Windows
+# 🎬 VideoCut – Smart Video Splitter for Windows  ![Windows](https://img.shields.io/badge/platform-Windows-blue)  ![Release](https://img.shields.io/github/v/release/ecando1-9/videocut)
+
 
 VideoCut is a **portable Windows application** that splits long videos into
 overlapping clips (perfect for YouTube Shorts, Instagram Reels, and more).
@@ -30,4 +31,5 @@ Go to **Releases** and download the latest:
 
 ## 🧠 Example
 https://github.com/user-attachments/assets/5f05c082-e2d2-4c6c-8a87-222639c8f759<img width="695" height="659" alt="Screenshot 2025-12-20 195550" src="https://github.com/user-attachments/assets/1d6e2e3c-f307-4b32-ba18-e5181704a6db" />
+
 
