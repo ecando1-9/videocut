@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Binaries
+ffmpeg.exe
+ffprobe.exe
+ffplay.exe
+
+# OS
+Thumbs.db
+.DS_Store
