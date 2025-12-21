@@ -3,22 +3,45 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageTk
 
-# ================= PATH SETUP =================
-def resource_path(p):
+# ================= ROBUST PATH FINDER =================
+def get_path(filename):
+    """
+    Finds files (ffmpeg.exe, icon.ico) in 3 places:
+    1. Inside the EXE temp folder (sys._MEIPASS)
+    2. Next to the .exe file (sys.executable)
+    3. Next to the .py script (os.getcwd)
+    """
+    # 1. Check if running as PyInstaller EXE (Temp Folder)
     if hasattr(sys, "_MEIPASS"):
-        return os.path.join(sys._MEIPASS, p)
-    return os.path.abspath(p)
+        temp_path = os.path.join(sys._MEIPASS, filename)
+        if os.path.exists(temp_path):
+            return temp_path
 
-FFMPEG = resource_path("ffmpeg.exe")
-FFPROBE = resource_path("ffprobe.exe")
+    # 2. Check folder where EXE/Script is located
+    if getattr(sys, 'frozen', False):
+        # Running as EXE
+        base_path = os.path.dirname(sys.executable)
+    else:
+        # Running as Script
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        
+    local_path = os.path.join(base_path, filename)
+    if os.path.exists(local_path):
+        return local_path
+        
+    return local_path # Return strictly, even if missing
+
+# LOCATE BINARIES
+FFMPEG = get_path("ffmpeg.exe")
+FFPROBE = get_path("ffprobe.exe")
 
 # ================= ROOT APP =================
 app = tk.Tk()
-app.title("VideoCut Studio - Pro Colors")
+app.title("VideoCut Pro")
 app.geometry("1300x900")
 
-# --- ICON SETUP ---
-icon_path = resource_path("videocut.ico")
+# ICON SETUP
+icon_path = get_path("videocut.ico")
 if os.path.exists(icon_path):
     try: app.iconbitmap(icon_path)
     except: pass
@@ -27,7 +50,6 @@ if os.path.exists(icon_path):
 video_path = ""
 video_dur = 0.0
 
-# Clips
 clip_len = tk.IntVar(value=59)
 step_len = tk.IntVar(value=59)
 start_time = tk.IntVar(value=0)
@@ -35,23 +57,16 @@ end_time = tk.IntVar(value=0)
 max_clips_possible = tk.IntVar(value=0)
 user_export_limit = tk.IntVar(value=0)
 
-# Visuals
 text_str = tk.StringVar(value="PART {n}")
 font_size = tk.IntVar(value=30)
 text_color = tk.StringVar(value="white")
-text_opacity = tk.DoubleVar(value=1.0) # 0.1 to 1.0
+text_opacity = tk.DoubleVar(value=1.0)
 outline_color = tk.StringVar(value="black")
 outline_on = tk.BooleanVar(value=True)
 show_ui_overlay = tk.BooleanVar(value=True)
 
-# Colors List
-COLOR_LIST = [
-    "white", "black", "red", "green", "blue", "yellow", 
-    "cyan", "magenta", "orange", "purple", "pink", 
-    "gold", "teal", "lime", "navy", "gray", "brown"
-]
+COLOR_LIST = ["white", "black", "red", "green", "blue", "yellow", "cyan", "magenta", "orange", "purple", "pink", "gold", "teal", "gray"]
 
-# Zoom / Pan
 zoom_var = tk.DoubleVar(value=1.0)
 pan_x = 0; pan_y = 0
 text_rel_x = 0.5; text_rel_y = 0.2
@@ -82,14 +97,16 @@ def load_video():
 
     try:
         if not os.path.exists(FFPROBE):
-            messagebox.showerror("Error", "ffprobe.exe missing!")
+            messagebox.showerror("Binaries Missing", f"Could not find ffprobe.exe at:\n{FFPROBE}\n\nPlease place it next to the .exe file.")
             return
             
-        out = subprocess.check_output([FFPROBE, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path])
+        # Get Duration
+        out = subprocess.check_output([FFPROBE, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path], creationflags=subprocess.CREATE_NO_WINDOW)
         video_dur = float(out)
         end_time.set(int(video_dur))
         
-        subprocess.run([FFMPEG, "-y", "-ss", "2", "-i", path, "-vframes", "1", "-vf", "scale=1080:-1", "temp_preview.jpg"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Get Preview
+        subprocess.run([FFMPEG, "-y", "-ss", "2", "-i", path, "-vframes", "1", "-vf", "scale=1080:-1", "temp_preview.jpg"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW)
         original_img = Image.open("temp_preview.jpg")
         pan_x = 0; pan_y = 0; zoom_var.set(1.0)
         update_clips()
@@ -112,7 +129,6 @@ canvas = tk.Canvas(right_frame, width=CV_W, height=CV_H, bg="black", highlightth
 canvas.pack(expand=True, pady=20)
 
 def draw_stroked_text(cv, x, y, text, font, fill, outline, width=2):
-    # Preview ignores Opacity (Tkinter limit), but Export uses it.
     if outline and outline != "none":
         for ox, oy in [(-width,-width), (-width,width), (width,-width), (width,width), (-width,0), (width,0), (0,-width), (0,width)]:
             cv.create_text(x+ox, y+oy, text=text, font=font, fill=outline, tags="text_bg")
@@ -138,8 +154,7 @@ def render(*args):
     t_out = outline_color.get() if outline_on.get() else None
     draw_stroked_text(canvas, tx, ty, text_str.get().replace("{n}", "1"), t_font, text_color.get(), t_out)
     
-    bbox = canvas.bbox("text_fg")
-    if bbox: canvas.create_rectangle(bbox, fill="", outline="", tags="text_hitbox")
+    if canvas.bbox("text_fg"): canvas.create_rectangle(canvas.bbox("text_fg"), fill="", outline="", tags="text_hitbox")
 
     if show_ui_overlay.get():
         c = "#ddd"; rx = CV_W - 40; sy = 280
@@ -170,7 +185,7 @@ def export():
     if not video_path: return
     
     if not os.path.exists(FFMPEG):
-        messagebox.showerror("Error", f"ffmpeg.exe not found at:\n{FFMPEG}")
+        messagebox.showerror("Error", f"ffmpeg.exe not found at:\n{FFMPEG}\n\nMake sure it is in the same folder as the app.")
         return
 
     root_out_dir = filedialog.askdirectory(title="Select Output Location")
@@ -190,23 +205,29 @@ def export():
     rx = int(meta["x"] * R); ry = int(meta["y"] * R)
     
     vf_geo = f"scale={rw}:{rh} [fg]; color=s=1080x1920:c=black [bg]; [bg][fg] overlay=x={rx}:y={ry}:shortest=1"
-    
-    # --- TEXT WITH OPACITY ---
-    # format: fontcolor=white@0.5
     f_color = f"{text_color.get()}@{text_opacity.get()}"
     border = f":borderw=5:bordercolor={outline_color.get()}" if outline_on.get() else ""
-    
     vf_txt = f",drawtext=text='PART {{n}}':x=(w*{text_rel_x})-(text_w/2):y=(h*{text_rel_y})-(text_h/2):fontsize={font_size.get()*3}:fontcolor={f_color}{border}"
     full_vf = vf_geo + vf_txt
     
     start = start_time.get(); part = 1; count = 0
     
+    # LOG FILE
+    log_file = os.path.join(final_out_dir, "error_log.txt")
+
     while start < end_time.get() and count < limit:
+        # Check if start exceeds duration (Buffer safety)
+        if start >= video_dur:
+            break
+
         out_f = os.path.join(final_out_dir, f"{video_name}_clip_{part}.mp4")
         
+        # ADDED: -max_muxing_queue_size 1024 (Prevents buffer crashes)
+        # ADDED: creationflags (Hides console window)
         cmd = [
             FFMPEG, "-y", "-ss", str(start), "-i", video_path, 
             "-t", str(clip_len.get()),
+            "-max_muxing_queue_size", "1024", 
             "-filter_complex", full_vf.replace("{n}", str(part)),
             "-c:a", "aac", "-b:a", "128k",
             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "23",
@@ -214,9 +235,11 @@ def export():
         ]
         
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode != 0:
-                messagebox.showerror("FFmpeg Error", f"Clip {part} failed:\n\n{result.stderr[-500:]}")
+                with open(log_file, "a") as f:
+                    f.write(f"--- ERROR CLIP {part} ---\n{result.stderr}\n\n")
+                messagebox.showerror("Export Error", f"Clip {part} failed.\nSee 'error_log.txt' in the folder for details.")
                 return
         except Exception as e:
             messagebox.showerror("System Error", str(e)); return
@@ -224,13 +247,13 @@ def export():
         start += step_len.get(); part += 1; count += 1; progress["value"] += 1
         app.update_idletasks()
         
-    messagebox.showinfo("Success", f"Exported {count} clips to:\n{final_out_dir}")
+    messagebox.showinfo("Success", f"Exported {count} clips.")
 
 # ================= UI CONTROLS =================
 tk.Label(left_frame, text="VideoCut Pro", font=("Segoe UI", 22, "bold"), bg="#f0f0f0").pack(anchor="w")
 tk.Button(left_frame, text="📂 LOAD VIDEO", command=load_video, bg="#0078D7", fg="white", font=("Segoe UI", 10, "bold"), height=2).pack(fill="x", pady=10)
 
-# 1. CLIPS
+# CLIPS
 frame_time = tk.LabelFrame(left_frame, text="Clip Options", font=("Segoe UI", 11, "bold"), bg="#f0f0f0", padx=10, pady=10)
 frame_time.pack(fill="x", pady=10)
 tk.Label(frame_time, text="Start:", bg="#f0f0f0").grid(row=0, column=0); tk.Entry(frame_time, textvariable=start_time, width=6).grid(row=0, column=1, padx=5)
@@ -239,33 +262,18 @@ tk.Label(frame_time, text="Len:", bg="#f0f0f0").grid(row=1, column=0, pady=5); t
 tk.Label(frame_time, text="Step:", bg="#f0f0f0").grid(row=1, column=2); tk.Entry(frame_time, textvariable=step_len, width=6).grid(row=1, column=3)
 tk.Label(frame_time, text="Export Limit:", bg="#f0f0f0", fg="blue").grid(row=2, column=0, pady=5, columnspan=2); tk.Entry(frame_time, textvariable=user_export_limit, width=6).grid(row=2, column=2)
 
-# 2. VISUALS
+# VISUALS
 frame_vis = tk.LabelFrame(left_frame, text="Visual Editor", font=("Segoe UI", 11, "bold"), bg="#f0f0f0", padx=10, pady=10)
 frame_vis.pack(fill="x", pady=10)
-
-tk.Label(frame_vis, text="Video Zoom:", bg="#f0f0f0").pack(anchor="w")
-tk.Scale(frame_vis, from_=1.0, to=3.0, resolution=0.1, orient="horizontal", variable=zoom_var, bg="#f0f0f0").pack(fill="x")
-
-tk.Label(frame_vis, text="Text Content:", bg="#f0f0f0").pack(anchor="w", pady=(10,0))
-tk.Entry(frame_vis, textvariable=text_str).pack(fill="x")
-
-# Colors Row 1 (Text)
+tk.Label(frame_vis, text="Video Zoom:", bg="#f0f0f0").pack(anchor="w"); tk.Scale(frame_vis, from_=1.0, to=3.0, resolution=0.1, orient="horizontal", variable=zoom_var, bg="#f0f0f0").pack(fill="x")
+tk.Label(frame_vis, text="Text Content:", bg="#f0f0f0").pack(anchor="w", pady=(10,0)); tk.Entry(frame_vis, textvariable=text_str).pack(fill="x")
 c_row1 = tk.Frame(frame_vis, bg="#f0f0f0"); c_row1.pack(fill="x", pady=5)
-tk.Label(c_row1, text="Fill Color:", bg="#f0f0f0", width=10, anchor="w").pack(side="left")
-ttk.Combobox(c_row1, textvariable=text_color, values=COLOR_LIST, width=12).pack(side="left")
-
-# Colors Row 2 (Outline)
+tk.Label(c_row1, text="Fill Color:", bg="#f0f0f0", width=10, anchor="w").pack(side="left"); ttk.Combobox(c_row1, textvariable=text_color, values=COLOR_LIST, width=12).pack(side="left")
 c_row2 = tk.Frame(frame_vis, bg="#f0f0f0"); c_row2.pack(fill="x", pady=5)
-tk.Label(c_row2, text="Line Color:", bg="#f0f0f0", width=10, anchor="w").pack(side="left")
-ttk.Combobox(c_row2, textvariable=outline_color, values=COLOR_LIST + ["none"], width=12).pack(side="left")
-
-# Intensity Slider
-tk.Label(frame_vis, text="Text Intensity (Opacity):", bg="#f0f0f0").pack(anchor="w", pady=(5,0))
-tk.Scale(frame_vis, from_=0.1, to=1.0, resolution=0.1, orient="horizontal", variable=text_opacity, bg="#f0f0f0").pack(fill="x")
-
+tk.Label(c_row2, text="Line Color:", bg="#f0f0f0", width=10, anchor="w").pack(side="left"); ttk.Combobox(c_row2, textvariable=outline_color, values=COLOR_LIST + ["none"], width=12).pack(side="left")
+tk.Label(frame_vis, text="Text Intensity (Opacity):", bg="#f0f0f0").pack(anchor="w", pady=(5,0)); tk.Scale(frame_vis, from_=0.1, to=1.0, resolution=0.1, orient="horizontal", variable=text_opacity, bg="#f0f0f0").pack(fill="x")
 tk.Scale(frame_vis, from_=10, to=100, orient="horizontal", variable=font_size, label="Font Size", bg="#f0f0f0").pack(fill="x")
-tk.Checkbutton(frame_vis, text="Enable Outline", variable=outline_on, bg="#f0f0f0").pack(anchor="w")
-tk.Checkbutton(frame_vis, text="Show Safe Zone", variable=show_ui_overlay, bg="#f0f0f0").pack(anchor="w")
+tk.Checkbutton(frame_vis, text="Enable Outline", variable=outline_on, bg="#f0f0f0").pack(anchor="w"); tk.Checkbutton(frame_vis, text="Show Safe Zone", variable=show_ui_overlay, bg="#f0f0f0").pack(anchor="w")
 
 tk.Button(left_frame, text="START EXPORT", command=export, bg="#28a745", fg="white", font=("Segoe UI", 11, "bold"), height=2).pack(fill="x", pady=20)
 progress = ttk.Progressbar(left_frame); progress.pack(fill="x")
