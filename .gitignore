@@ -19,3 +19,10 @@ Thumbs.db
 .jpg
 .ico
 .png
+# Ignore all image files
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.ico
